@@ -1,0 +1,5 @@
+# ninja log v5
+398	457	1712991910510089131	CMakeFiles/untitled1.dir/libmf.c.o	466c6675f12d8c07
+457	505	1712991910554089518	CMakeFiles/untitled1.dir/mfserver.c.o	c5e737c1329313f1
+505	621	1712991910666090499	untitled1	44dacd4927bb831b
+2	398	1712991910450088601	CMakeFiles/untitled1.dir/main.c.o	ad6de31fe19dffb7
