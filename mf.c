@@ -121,6 +121,50 @@ int mf_destroy() {
     return 0; // Return 0 for successful cleanup
 }
 
+int mf_connect(){
+    FILE *config_file = fopen(CONFIG_FILENAME, "r");
+    if (config_file == NULL) {
+        perror("Failed to open config file");
+        return -1;
+    }
+
+    char line[256];
+    char shmem_name[100];
+    int shmem_size = 0;
+    int max_msgs_in_queue = 0;
+    int max_queues_in_shmem = 0;
+
+    while (fgets(line, sizeof(line), config_file)) {
+        char *key = strtok(line, "=");
+        char *value = strtok(NULL, "\n");
+
+        if (strcmp(key, "SHMEM_NAME") == 0) {
+            strcpy(shmem_name, value);
+        } else if (strcmp(key, "SHMEM_SIZE") == 0) {
+            shmem_size = atoi(value);
+        } else if (strcmp(key, "MAX_MSGS_IN_QUEUE") == 0) {
+            max_msgs_in_queue = atoi(value);
+        } else if (strcmp(key, "MAX_QUEUES_IN_SHMEM") == 0) {
+            max_queues_in_shmem = atoi(value);
+        }
+    }
+
+    fclose(config_file);
+
+    // Perform initialization using the retrieved parameters
+    // For example:
+    // int shmem_fd = shm_open(shmem_name, O_CREAT | O_RDWR, 0666);
+    // ftruncate(shmem_fd, shmem_size);
+    // char *shmem_ptr = mmap(NULL, shmem_size, PROT_READ | PROT_WRITE, MAP_SHARED, shmem_fd, 0);
+    // Initialize message queues using max_msgs_in_queue and max_queues_in_shmem
+
+    // Check if initialization is successful and return the appropriate status
+    // Here you would add your own code to initialize the shared memory and message queues
+    // ...
+
+    return 0; //
+}
+
 int mf_disconnect()
 {
     // Implementation for mf_disconnect
