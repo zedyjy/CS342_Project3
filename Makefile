@@ -1,18 +1,33 @@
-CC = gcc
-CFLAGS = -Wall -Wextra -pthread
-LDFLAGS =
+CC := gcc
+CFLAGS := -Wall -Wextra -pthread
 
-SRCS = mfserver.c mf.c
-OBJS = $(SRCS:.c=.o)
-EXEC = mfserver
+TARGETS := app mfserver
+LIBRARY := libmf.a
 
-all: $(EXEC)
+all: $(TARGETS)
 
-$(EXEC): $(OBJS)
-	$(CC) $(CFLAGS) $(OBJS) -o $(EXEC) $(LDFLAGS)
+MF_SRC := mf.c
+MF_OBJS := $(MF_SRC:.c=.o)
 
-%.o: %.c
-	$(CC) $(CFLAGS) -c $< -o $@
+libmf.a: $(MF_OBJS)
+	ar rcs $@ $(MF_OBJS)
+
+MF_LIB := -L. -lmf
+
+mf.o: mf.c mf.h
+	$(CC) -c $(CFLAGS) -o $@ $<
+
+app.o: app.c mf.h
+	$(CC) -c $(CFLAGS) -o $@ $<
+
+mfserver.o: mfserver.c mf.h
+	$(CC) -c $(CFLAGS) -o $@ $<
+
+app: app.o $(LIBRARY)
+	$(CC) $(CFLAGS) -o $@ $^
+
+mfserver: mfserver.o $(LIBRARY)
+	$(CC) $(CFLAGS) -o $@ $^
 
 clean:
-	rm -f $(OBJS) $(EXEC)
+	rm -f *.o $(TARGETS) $(LIBRARY)

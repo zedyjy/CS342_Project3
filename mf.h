@@ -1,14 +1,39 @@
-// mf.h - Header file
-
 #ifndef MF_H
 #define MF_H
 
-struct MF {
-    // Declare any necessary member variables here
-};
+#include <semaphore.h> // Include semaphore header
 
-typedef struct MF MF;
+// Configuration file name
+#define CONFIG_FILENAME "config.txt"
 
+// Maximum number of message queues
+#define MAX_MQS 10
+
+// Maximum length of a message queue name
+#define MAX_MQ_NAME_LENGTH 50
+
+// Maximum length of message data
+#define MAX_MQ_DATA_LENGTH 100
+
+// Non-configurable parameters
+#define MIN_DATALEN 1
+#define MAX_DATALEN MAX_MQ_DATA_LENGTH
+#define MAX_MQNAME_SIZE MAX_MQ_NAME_LENGTH
+#define MIN_MQSIZE 1
+#define MAX_MQSIZE (MAX_MQ_DATA_LENGTH / 1024) // Convert from bytes to KB
+#define MIN_SHMEMSIZE 1
+#define MAX_SHMEMSIZE 1024 // In MB
+
+// Configurable parameters
+#define SHMEM_NAME "SHMEM_NAME"
+#define SHMEM_SIZE "SHMEM_SIZE"
+#define MAX_MSGS_IN_QUEUE "MAX_MSGS_IN_QUEUE"
+#define MAX_QUEUES_IN_SHMEM "MAX_QUEUES_IN_SHMEM"
+
+// Define global semaphore mutex
+extern sem_t *mutex;
+
+// Function prototypes
 int mf_init();
 int mf_destroy();
 int mf_connect();

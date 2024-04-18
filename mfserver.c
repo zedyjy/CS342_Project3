@@ -8,17 +8,12 @@
 // Signal handler function for SIGINT
 void sigint_handler(int signum) {
     printf("Received SIGINT signal. Exiting...\n");
+    mf_destroy(); // Call mf_destroy() for cleanup
     exit(signum);
 }
 
-int main(int argc, char *argv[]) {
+int main() {
     printf("mfserver pid=%d\n", (int) getpid());
-
-    // Register the signal handler function
-    if (signal(SIGINT, sigint_handler) == SIG_ERR) {
-        perror("signal");
-        exit(1);
-    }
 
     // Call mf_init() to create and initialize the shared memory region
     if (mf_init() == -1) {
@@ -26,52 +21,20 @@ int main(int argc, char *argv[]) {
         exit(1);
     }
 
-    // Create a message queue
-    if (mf_create("test_queue", 10) == -1) {
-        fprintf(stderr, "Error creating message queue\n");
+    // Register the signal handler function
+    if (signal(SIGINT, sigint_handler) == SIG_ERR) {
+        perror("signal");
         exit(1);
     }
 
-    // Open the message queue
-    int qid = mf_open("test_queue");
-    if (qid == -1) {
-        fprintf(stderr, "Error opening message queue\n");
-        exit(1);
-    }
+    printf("You're now in 1\n");
 
-    // Prepare a message to send
-    char message[] = "what";
-    int message_length = strlen(message) + 1;
+    // Do some initialization if needed
 
-    // Send the message
-    if (mf_send(qid, message, message_length) == -1) {
-        fprintf(stderr, "Error sending message\n");
-        exit(1);
-    }
-    printf("Message sent: %s\n", message);
-
-    // Receive a message
-    char received_message[100]; // Assuming the buffer size is sufficient
-    if (mf_recv(qid, received_message, sizeof(received_message)) == -1) {
-        fprintf(stderr, "Error receiving message\n");
-        exit(1);
-    }
-    printf("Message received: %s\n", received_message);
-
-    // Close the message queue
-    if (mf_close(qid) == -1) {
-        fprintf(stderr, "Error closing message queue\n");
-        exit(1);
-    }
-
-    // Check if the sent and received messages match
-    if (strcmp(message, received_message) == 0) {
-        printf("Sent and received messages match!\n");
-    } else {
-        printf("Error: Sent and received messages do not match\n");
+    while (1) {
+        sleep(1000); // Sleep for most of the time
     }
 
     return 0;
 }
-
 

@@ -7,101 +7,98 @@
 #include <sys/stat.h>
 #include <semaphore.h>
 #include <string.h>
+#include "mf.h"
 
-#define CONFIG_FILENAME "config.txt" // Configuration file name
-#define MAX_MQS 10                  // Maximum number of message queues
-#define MAX_MQ_NAME_LENGTH 50       // Maximum length of a message queue name
-#define SHM_SIZE sizeof(struct shared_memory) // Size of the shared memory segment
-#define MAX_MQ_DATA_LENGTH 100 // Example size, adjust as needed
-
-// Define semaphore name
+#define CONFIG_FILENAME "config.txt"
+#define MAX_MQS 10
+#define MAX_MQ_NAME_LENGTH 50
+#define SHM_SIZE sizeof(struct shared_memory)
+#define MAX_MQ_DATA_LENGTH 100
 #define SEM_NAME "/mf_semaphore"
+#define SHARED_MEMORY_KEY 12345 // Define a constant key for shared memory
 
-// Global variable for semaphore
-sem_t *sem;
+sem_t *mutex;
 
-// Structure to represent a message queue
-struct message_queue
-{
+// Define structures
+struct message_queue {
     char name[MAX_MQ_NAME_LENGTH];
-    char data[MAX_MQ_DATA_LENGTH]; // New field to hold message data
+    char data[MAX_MQ_DATA_LENGTH];
     int size;
-    // Add any other necessary fields
 };
 
-
-// Structure to represent the shared memory
-struct shared_memory
-{
+struct shared_memory {
     int num_queues;
     struct message_queue queues[MAX_MQS];
-    // Add any other necessary fields
 };
 
-// Global variables for shared memory and synchronization objects
+// Global variables
 int shmid;
 struct shared_memory *shm_ptr;
-sem_t *mutex; // Mutex for thread safety
 
-int mf_init()
-{
-    // Create the semaphore
-    sem = sem_open(SEM_NAME, O_CREAT, 0666, 1);
-    if (sem == SEM_FAILED)
-    {
-        perror("sem_open");
+// Function prototypes
+int mf_init();
+int mf_create(char *mqname, int mqsize);
+int mf_remove(char *mqname);
+int mf_open(char *mqname);
+int mf_close(int qid);
+int mf_send(int qid, void *bufptr, int datalen);
+int mf_recv(int qid, void *bufptr, int bufsize);
+
+// Function definitions
+int mf_init() {
+    printf("You're now in mf_init()\n");
+    // Read configuration file and populate shared memory
+    FILE *config_file = fopen(CONFIG_FILENAME, "r");
+    if (config_file == NULL) {
+        perror("fopen");
         return -1;
     }
 
-    // Create shared memory segment
-    if ((shmid = shmget(IPC_PRIVATE, SHM_SIZE, IPC_CREAT | 0666)) < 0)
-    {
+    // Generate key for shared memory
+    key_t shm_key = ftok(".", SHARED_MEMORY_KEY);
+    if (shm_key == -1) {
+        perror("ftok");
+        fclose(config_file);
+        return -1;
+    }
+
+    // Allocate shared memory
+    if ((shmid = shmget(shm_key, SHM_SIZE, IPC_CREAT | 0666)) < 0) {
         perror("shmget");
+        fclose(config_file);
         return -1;
     }
 
-    // Attach to the shared memory segment
-    if ((shm_ptr = (struct shared_memory *)shmat(shmid, NULL, 0)) == (struct shared_memory *)-1)
-    {
+    // Attach to shared memory
+    if ((shm_ptr = (struct shared_memory *)shmat(shmid, NULL, 0)) == (struct shared_memory *)-1) {
         perror("shmat");
+        fclose(config_file);
         return -1;
     }
 
     // Initialize synchronization objects
-    mutex = (sem_t *)malloc(sizeof(sem_t)); // Allocate memory for mutex
-    if (mutex == NULL)
-    {
-        perror("malloc");
-        return -1;
-    }
-    if (sem_init(mutex, 1, 1) == -1)
-    { // Initialize mutex with value 1 for thread safety
-        perror("sem_init");
-        return -1;
-    }
-
-    // Read configuration file and populate shared memory
-    FILE *config_file = fopen(CONFIG_FILENAME, "r");
-    if (config_file == NULL)
-    {
-        perror("fopen");
+    mutex = sem_open(SEM_NAME, 0); // Open existing semaphore without O_CREAT
+    if (mutex == SEM_FAILED) {
+        perror("sem_open");
+        fclose(config_file);
         return -1;
     }
 
     // Read configuration and populate shared memory
     fscanf(config_file, "%d", &shm_ptr->num_queues);
-    for (int i = 0; i < shm_ptr->num_queues; i++)
-    {
+    for (int i = 0; i < shm_ptr->num_queues; i++) {
         fscanf(config_file, "%s %d", shm_ptr->queues[i].name, &shm_ptr->queues[i].size);
     }
 
     // Close the configuration file
     fclose(config_file);
 
-    return 0; // MF_SUCCESS
+    return 0; // Success
 }
 
+
 int mf_destroy() {
+    printf("\nyoure now in mf destroy");
     // Detach from the shared memory segment
     if (shmctl(shmid, IPC_RMID, NULL) == -1) {
         perror("shmctl IPC_RMID");
@@ -109,7 +106,7 @@ int mf_destroy() {
     }
 
     // Close and unlink the semaphore
-    if (sem_close(sem) == -1) {
+    if (sem_close(mutex) == -1) { // Change sem to mutex
         perror("sem_close");
         return -1;
     }
@@ -121,52 +118,50 @@ int mf_destroy() {
     return 0; // Return 0 for successful cleanup
 }
 
-int mf_connect(){
+int mf_connect() {
+    printf("\nyoure now in mf connect");
+
+    // Read the configuration file to retrieve shared memory name and size
     FILE *config_file = fopen(CONFIG_FILENAME, "r");
     if (config_file == NULL) {
-        perror("Failed to open config file");
+        perror("fopen");
         return -1;
     }
 
-    char line[256];
-    char shmem_name[100];
-    int shmem_size = 0;
-    int max_msgs_in_queue = 0;
-    int max_queues_in_shmem = 0;
+    char shmem_name[MAX_MQ_NAME_LENGTH];
+    int shmem_size;
 
-    while (fgets(line, sizeof(line), config_file)) {
-        char *key = strtok(line, "=");
-        char *value = strtok(NULL, "\n");
-
-        if (strcmp(key, "SHMEM_NAME") == 0) {
-            strcpy(shmem_name, value);
-        } else if (strcmp(key, "SHMEM_SIZE") == 0) {
-            shmem_size = atoi(value);
-        } else if (strcmp(key, "MAX_MSGS_IN_QUEUE") == 0) {
-            max_msgs_in_queue = atoi(value);
-        } else if (strcmp(key, "MAX_QUEUES_IN_SHMEM") == 0) {
-            max_queues_in_shmem = atoi(value);
-        }
-    }
-
+    fscanf(config_file, "%s %d", shmem_name, &shmem_size);
     fclose(config_file);
 
-    // Perform initialization using the retrieved parameters
-    // For example:
-    // int shmem_fd = shm_open(shmem_name, O_CREAT | O_RDWR, 0666);
-    // ftruncate(shmem_fd, shmem_size);
-    // char *shmem_ptr = mmap(NULL, shmem_size, PROT_READ | PROT_WRITE, MAP_SHARED, shmem_fd, 0);
-    // Initialize message queues using max_msgs_in_queue and max_queues_in_shmem
+    // Attach to the shared memory segment
+    shmid = shmget(IPC_PRIVATE, shmem_size, IPC_CREAT | 0666);
+    if (shmid == -1) {
+        perror("shmget");
+        return -1;
+    }
 
-    // Check if initialization is successful and return the appropriate status
-    // Here you would add your own code to initialize the shared memory and message queues
-    // ...
+    // Attach to the shared memory
+    shm_ptr = (struct shared_memory *)shmat(shmid, NULL, 0);
+    if (shm_ptr == (struct shared_memory *) -1) {
+        perror("shmat");
+        return -1;
+    }
 
-    return 0; //
+    // Initialize synchronization objects
+    mutex = sem_open(SEM_NAME, O_CREAT, 0666, 1);
+    if (mutex == SEM_FAILED) {
+        perror("sem_open");
+        return -1;
+    }
+
+    return 0; // Return 0 upon successful initialization
 }
 
 int mf_disconnect()
 {
+    printf("\nyoure now in mf disconnect");
+
     // Implementation for mf_disconnect
     if (shmdt(shm_ptr) == -1)
     {
@@ -177,26 +172,27 @@ int mf_disconnect()
     return 0;
 }
 
-int mf_create(char *mqname, int mqsize)
-{
-    // Implementation for mf_create
-    if (shm_ptr->num_queues >= MAX_MQS)
-    {
+int mf_create(char *mqname, int mqsize) {
+    printf("\nyoure now in mf create");
+
+    // Check if maximum number of message queues reached
+    if (shm_ptr->num_queues >= MAX_MQS) {
         fprintf(stderr, "Maximum number of message queues reached\n");
         return -1;
     }
 
+    // Create new message queue
     strcpy(shm_ptr->queues[shm_ptr->num_queues].name, mqname);
     shm_ptr->queues[shm_ptr->num_queues].size = mqsize;
-
-    // Increment the number of queues
     shm_ptr->num_queues++;
 
-    return 0;
+    return 0; // Success
 }
 
 int mf_remove(char *mqname)
 {
+    printf("\nyoure now in mf remove");
+
     // Implementation for mf_remove
     int i;
     for (i = 0; i < shm_ptr->num_queues; i++)
@@ -220,13 +216,12 @@ int mf_remove(char *mqname)
     return -1;
 }
 
-int mf_open(char *mqname)
-{
+int mf_open(char *mqname) {
+    printf("\nyou're now in mf open");
+
     // Implementation for mf_open
-    for (int i = 0; i < shm_ptr->num_queues; i++)
-    {
-        if (strcmp(shm_ptr->queues[i].name, mqname) == 0)
-        {
+    for (int i = 0; i < shm_ptr->num_queues; i++) {
+        if (strcmp(shm_ptr->queues[i].name, mqname) == 0) {
             // Return the index of the message queue as the queue ID (qid)
             return i;
         }
@@ -238,6 +233,8 @@ int mf_open(char *mqname)
 
 int mf_close(int qid)
 {
+    printf("\nyoure now in mf close");
+
     // Implementation for mf_close
     if (qid < 0 || qid >= shm_ptr->num_queues)
     {
@@ -251,6 +248,9 @@ int mf_close(int qid)
 
 int mf_send(int qid, void *bufptr, int datalen)
 {
+    printf("\nyoure now in mf send");
+    printf("\nqid in send %d", qid);
+
     // Implementation for mf_send
     if (qid < 0 || qid >= shm_ptr->num_queues)
     {
@@ -265,6 +265,13 @@ int mf_send(int qid, void *bufptr, int datalen)
         return -1;
     }
 
+    // Check if the queue buffer is large enough to hold the message data
+    if (datalen > shm_ptr->queues[qid].size)
+    {
+        fprintf(stderr, "Queue buffer is too small\n");
+        return -1;
+    }
+
     // Copy the message data from the buffer to the message queue
     memcpy(shm_ptr->queues[qid].data, bufptr, datalen);
     shm_ptr->queues[qid].size = datalen;
@@ -272,27 +279,30 @@ int mf_send(int qid, void *bufptr, int datalen)
     return 0;
 }
 
-int mf_recv(int qid, void *bufptr, int bufsize)
-{
+int mf_recv(int qid, void *bufptr, int bufsize) {
+    printf("\nyou're now in mf receive");
+    printf("\nqid in receive %d", qid);
+
+
     // Implementation for mf_recv
-    if (qid < 0 || qid >= shm_ptr->num_queues)
-    {
+    if (qid < 0 || qid >= shm_ptr->num_queues) {
         fprintf(stderr, "Invalid queue ID\n");
         return -1;
     }
 
-    // Copy the message data from the message queue to the buffer
-    if (bufsize < shm_ptr->queues[qid].size)
-    {
+    // Check if the buffer size is large enough to hold the received message data
+    if (bufsize < shm_ptr->queues[qid].size) {
         fprintf(stderr, "Buffer size is too small\n");
         return -1;
     }
 
+    // Copy the message data from the message queue to the buffer
     memcpy(bufptr, shm_ptr->queues[qid].data, shm_ptr->queues[qid].size);
     ((char *)bufptr)[shm_ptr->queues[qid].size] = '\0'; // Ensure null-termination
 
     return 0;
 }
+
 
 int mf_print()
 {
