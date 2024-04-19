@@ -23,8 +23,8 @@ main(int argc, char **argv)
     char sendbuffer[MAX_DATALEN];
     int n_sent, n_received;
     char recvbuffer[MAX_DATALEN];
-    int sentcount;
-    int receivedcount;
+    int sentcount=0;
+    int receivedcount=0;
     int totalcount;
 
     totalcount = COUNT;

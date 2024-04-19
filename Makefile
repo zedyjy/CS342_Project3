@@ -35,7 +35,7 @@ consumer.o: consumer.c  mf.c mf.h
 consumer: consumer.o libmf.a mf.o
 	gcc $(CFLAGS) -o $@ consumer.o $(MF_LIB)
 
-mfserver: mfserver.c  mf.c mf.h
+mfserver.o: mfserver.c  mf.c mf.h
 	gcc -c $(CFLAGS)  -o $@ mfserver.c
 
 mfserver: mfserver.o libmf.a mf.o

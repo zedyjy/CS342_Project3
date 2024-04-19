@@ -6,6 +6,7 @@
 #include <semaphore.h>
 #include <string.h>
 #include "mf.h"
+#include <errno.h> // Include errno for error handling
 
 #define CONFIG_FILENAME "config.txt"
 #define MAX_MQS 10
@@ -82,13 +83,13 @@ int mf_init() {
     }
 
     // Read configuration and populate shared memory
-    fscanf(config_file, "%d", &shm_ptr->num_queues);
+    /*fscanf(config_file, "%d", &shm_ptr->num_queues);
     char mqname[MAX_MQ_NAME_LENGTH]; // Temporary buffer to hold the message queue name
     fscanf(config_file, "%s", mqname); // Read the message queue name from the configuration file
     for (int i = 0; i < shm_ptr->num_queues; i++) {
         // Use the read message queue name when creating the message queue
         mf_create(mqname, 16); // Use mqname read from the config file; create mq; 16 KB
-    }
+    }*/
 
     // Close the configuration file
     fclose(config_file);
@@ -247,59 +248,109 @@ int mf_close(int qid)
     return 0;
 }
 
-int mf_send(int qid, void *bufptr, int datalen)
-{
-    printf("\nyoure now in mf send");
-    printf("\nqid in send %d", qid);
+int mf_send(int qid, void *bufptr, int datalen) {
+    // Acquire the semaphore to ensure mutual exclusion
+    if (sem_wait(mutex) == -1) {
+        perror("sem_wait");
+        return -1;
+    }
 
     // Implementation for mf_send
-    if (qid < 0 || qid >= shm_ptr->num_queues)
-    {
+    if (qid < 0 || qid >= shm_ptr->num_queues) {
         fprintf(stderr, "Invalid queue ID\n");
+        // Release the semaphore before returning
+        sem_post(mutex);
         return -1;
     }
 
     // Check if the data length exceeds the maximum message data length
-    if (datalen > MAX_MQ_DATA_LENGTH)
-    {
+    if (datalen > MAX_MQ_DATA_LENGTH) {
         fprintf(stderr, "Message data exceeds maximum length\n");
+        // Release the semaphore before returning
+        sem_post(mutex);
         return -1;
     }
 
-    // Copy the message data from the buffer to the message queue
-    memcpy(shm_ptr->queues[qid].data, bufptr, datalen);
+    // Check if there is enough space in the message queue buffer
+    while (shm_ptr->queues[qid].size + datalen > MAX_MQ_DATA_LENGTH) {
+        // Release the semaphore temporarily while waiting for space
+        sem_post(mutex);
+        // Sleep for a short duration before checking again
+        usleep(10000); // Sleep for 10 milliseconds (adjust as needed)
+        // Acquire the semaphore again before continuing
+        if (sem_wait(mutex) == -1) {
+            perror("sem_wait");
+            return -1;
+        }
+    }
 
-    // Set the size of the message data in the message queue structure
-    shm_ptr->queues[qid].size = datalen;
+    // Copy the message data from the buffer to the message queue
+    memcpy(shm_ptr->queues[qid].data + shm_ptr->queues[qid].size, bufptr, datalen);
+
+    // Update the size of the message data in the message queue structure
+    shm_ptr->queues[qid].size += datalen;
+
+    // Release the semaphore
+    if (sem_post(mutex) == -1) {
+        perror("sem_post");
+        return -1;
+    }
 
     return 0;
 }
 
-
 int mf_recv(int qid, void *bufptr, int bufsize) {
-    printf("\nyou're now in mf receive");
-    printf("\nqid in receive %d\n", qid);
-
+    // Acquire the semaphore to ensure mutual exclusion
+    if (sem_wait(mutex) == -1) {
+        perror("sem_wait");
+        return -1;
+    }
 
     // Implementation for mf_recv
     if (qid < 0 || qid >= shm_ptr->num_queues) {
         fprintf(stderr, "Invalid queue ID\n");
+        // Release the semaphore before returning
+        sem_post(mutex);
         return -1;
+    }
+
+    // Check if there are any messages available in the message queue buffer
+    while (shm_ptr->queues[qid].size == 0) {
+        // Release the semaphore temporarily while waiting for a message
+        sem_post(mutex);
+        // Sleep for a short duration before checking again
+        usleep(10000); // Sleep for 10 milliseconds (adjust as needed)
+        // Acquire the semaphore again before continuing
+        if (sem_wait(mutex) == -1) {
+            perror("sem_wait");
+            return -1;
+        }
     }
 
     // Check if the buffer size is large enough to hold the received message data
     if (bufsize < shm_ptr->queues[qid].size) {
         fprintf(stderr, "Buffer size is too small\n");
+        // Release the semaphore before returning
+        sem_post(mutex);
         return -1;
     }
 
     // Copy the message data from the message queue to the buffer
     memcpy(bufptr, shm_ptr->queues[qid].data, shm_ptr->queues[qid].size);
+    int received_data_length = shm_ptr->queues[qid].size; // Store the received data length
     ((char *)bufptr)[shm_ptr->queues[qid].size] = '\0'; // Ensure null-termination
 
-    return 0;
-}
+    // Reset the size of the message data in the message queue structure
+    shm_ptr->queues[qid].size = 0;
 
+    // Release the semaphore
+    if (sem_post(mutex) == -1) {
+        perror("sem_post");
+        return -1;
+    }
+
+    return received_data_length; // Return the actual received data length
+}
 
 int mf_print()
 {
