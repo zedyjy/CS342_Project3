@@ -172,30 +172,23 @@ int mf_disconnect()
     return 0;
 }
 
+
 int mf_create(char *mqname, int mqsize) {
     printf("\nyoure now in mf create");
-    printf("\nanan");
 
     // Check if maximum number of message queues reached
     if (shm_ptr->num_queues >= MAX_MQS) {
         fprintf(stderr, "Maximum number of message queues reached\n");
         return -1;
     }
-    printf("\nanan2");
 
     // Create new message queue
-    strcpy(shm_ptr->queues[shm_ptr->num_queues].name, mqname); // Use provided name
-    printf("\nanan3");
-
+    strcpy(shm_ptr->queues[shm_ptr->num_queues].name, mqname);
     shm_ptr->queues[shm_ptr->num_queues].size = mqsize;
-    printf("\nanan4");
-
     shm_ptr->num_queues++;
-    printf("\nanan4");
 
     return 0; // Success
 }
-
 
 int mf_remove(char *mqname)
 {
