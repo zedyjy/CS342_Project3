@@ -1,10 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/ipc.h>
-#include <sys/shm.h>
-#include <sys/types.h>
 #include <fcntl.h>
-#include <sys/stat.h>
+#include <sys/mman.h>
+#include <unistd.h>
 #include <semaphore.h>
 #include <string.h>
 #include "mf.h"
@@ -12,10 +10,8 @@
 #define CONFIG_FILENAME "config.txt"
 #define MAX_MQS 10
 #define MAX_MQ_NAME_LENGTH 50
-#define SHM_SIZE sizeof(struct shared_memory)
 #define MAX_MQ_DATA_LENGTH 100
 #define SEM_NAME "/mf_semaphore"
-#define SHARED_MEMORY_KEY 12345 // Define a constant key for shared memory
 
 sem_t *mutex;
 
@@ -32,7 +28,7 @@ struct shared_memory {
 };
 
 // Global variables
-int shmid;
+int shm_fd;
 struct shared_memory *shm_ptr;
 
 // Function prototypes
@@ -54,32 +50,33 @@ int mf_init() {
         return -1;
     }
 
-    // Generate key for shared memory
-    key_t shm_key = ftok(".", SHARED_MEMORY_KEY);
-    if (shm_key == -1) {
-        perror("ftok");
-        fclose(config_file);
-        return -1;
-    }
-
-    // Allocate shared memory
-    if ((shmid = shmget(shm_key, SHM_SIZE, IPC_CREAT | 0666)) < 0) {
-        perror("shmget");
-        fclose(config_file);
-        return -1;
-    }
-
-    // Attach to shared memory
-    if ((shm_ptr = (struct shared_memory *)shmat(shmid, NULL, 0)) == (struct shared_memory *)-1) {
-        perror("shmat");
-        fclose(config_file);
-        return -1;
-    }
-
-    // Initialize synchronization objects
+    // Open the semaphore
     mutex = sem_open(SEM_NAME, O_CREAT, 0666, 1);
     if (mutex == SEM_FAILED) {
         perror("sem_open");
+        fclose(config_file);
+        return -1;
+    }
+
+    // Open or create the shared memory object
+    shm_fd = shm_open("/shared_memory_name", O_CREAT | O_RDWR, 0666);
+    if (shm_fd == -1) {
+        perror("shm_open");
+        fclose(config_file);
+        return -1;
+    }
+
+    // Set the size of the shared memory object
+    if (ftruncate(shm_fd, sizeof(struct shared_memory)) == -1) {
+        perror("ftruncate");
+        fclose(config_file);
+        return -1;
+    }
+
+    // Map the shared memory object into the address space
+    shm_ptr = mmap(NULL, sizeof(struct shared_memory), PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
+    if (shm_ptr == MAP_FAILED) {
+        perror("mmap");
         fclose(config_file);
         return -1;
     }
@@ -99,20 +96,34 @@ int mf_init() {
 
 int mf_destroy() {
     printf("\nyoure now in mf destroy");
-    // Detach from the shared memory segment
-    if (shmctl(shmid, IPC_RMID, NULL) == -1) {
-        perror("shmctl IPC_RMID");
+    // Unmap the shared memory
+    if (munmap(shm_ptr, sizeof(struct shared_memory)) == -1) {
+        perror("munmap");
         return -1;
     }
 
-    // Close and unlink the semaphore
-    if (sem_close(mutex) == -1) { // Change sem to mutex
-        perror("sem_close");
-        return -1;
+    // Close and unlink the shared memory object
+    if (shm_fd != -1) {
+        if (close(shm_fd) == -1) {
+            perror("close");
+            return -1;
+        }
+        if (shm_unlink("/shared_memory_name") == -1) {
+            perror("shm_unlink");
+            return -1;
+        }
     }
-    if (sem_unlink(SEM_NAME) == -1) {
-        perror("sem_unlink");
-        return -1;
+
+    // Close and unlink the semaphore
+    if (mutex != SEM_FAILED) {
+        if (sem_close(mutex) == -1) {
+            perror("sem_close");
+            return -1;
+        }
+        if (sem_unlink(SEM_NAME) == -1) {
+            perror("sem_unlink");
+            return -1;
+        }
     }
 
     return 0; // Return 0 for successful cleanup
@@ -121,37 +132,24 @@ int mf_destroy() {
 int mf_connect() {
     printf("\nyoure now in mf connect");
 
-    // Read the configuration file to retrieve shared memory name and size
-    FILE *config_file = fopen(CONFIG_FILENAME, "r");
-    if (config_file == NULL) {
-        perror("fopen");
-        return -1;
-    }
-
-    char shmem_name[MAX_MQ_NAME_LENGTH];
-    int shmem_size;
-
-    fscanf(config_file, "%s %d", shmem_name, &shmem_size);
-    fclose(config_file);
-
-    // Attach to the shared memory segment
-    shmid = shmget(IPC_PRIVATE, shmem_size, IPC_CREAT | 0666);
-    if (shmid == -1) {
-        perror("shmget");
-        return -1;
-    }
-
-    // Attach to the shared memory
-    shm_ptr = (struct shared_memory *)shmat(shmid, NULL, 0);
-    if (shm_ptr == (struct shared_memory *) -1) {
-        perror("shmat");
-        return -1;
-    }
-
-    // Initialize synchronization objects
+    // Open the semaphore
     mutex = sem_open(SEM_NAME, O_CREAT, 0666, 1);
     if (mutex == SEM_FAILED) {
         perror("sem_open");
+        return -1;
+    }
+
+    // Open the shared memory object
+    shm_fd = shm_open("/shared_memory_name", O_RDWR, 0666);
+    if (shm_fd == -1) {
+        perror("shm_open");
+        return -1;
+    }
+
+    // Map the shared memory object into the address space
+    shm_ptr = mmap(NULL, sizeof(struct shared_memory), PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
+    if (shm_ptr == MAP_FAILED) {
+        perror("mmap");
         return -1;
     }
 
@@ -162,29 +160,37 @@ int mf_disconnect()
 {
     printf("\nyoure now in mf disconnect");
 
-    // Implementation for mf_disconnect
-    if (shmdt(shm_ptr) == -1)
+    // Unmap the shared memory
+    if (munmap(shm_ptr, sizeof(struct shared_memory)) == -1)
     {
-        perror("shmdt");
+        perror("munmap");
         return -1;
     }
 
     return 0;
 }
 
+
 int mf_create(char *mqname, int mqsize) {
     printf("\nyoure now in mf create");
+    printf("\nanan");
 
     // Check if maximum number of message queues reached
     if (shm_ptr->num_queues >= MAX_MQS) {
         fprintf(stderr, "Maximum number of message queues reached\n");
         return -1;
     }
+    printf("\nanan2");
 
     // Create new message queue
     strcpy(shm_ptr->queues[shm_ptr->num_queues].name, mqname);
+    printf("\nanan3");
+
     shm_ptr->queues[shm_ptr->num_queues].size = mqsize;
+    printf("\nanan4");
+
     shm_ptr->num_queues++;
+    printf("\nanan4");
 
     return 0; // Success
 }

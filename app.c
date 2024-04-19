@@ -32,7 +32,9 @@ int main() {
         sem2 = sem_open(semname2, 0);
         mf_connect();
         mf_create (mqname1, 16); // Use mqname1 here
+
         qid = mf_open(mqname1);
+        printf("\nanan5");
 
         sem_wait(mutex); // Acquire mutex before accessing shared resources
         for (i = 0; i < COUNT; ++i) {

@@ -1,2 +1,19 @@
-name = my_queue
-size = 100
+# This is the MF configuration file.
+# In this file, any line that is starting with the hash symbol (#)
+# should be omitted by your program (library).
+# Your library should read this file and initialize the related parameters.
+# The mf_init() and mf_connect() functions will read this file.
+# The mf_init() function is called by mfserver.
+# The mf_connect() function is called by an application (process).
+
+SHMEM_NAME "/sharedmemoryname"
+# name of the shared memory region to use
+
+SHMEM_SIZE 512 // means 512 KB
+# size of the shared memory region to use
+
+MAX_MSGS_IN_QUEUE 10
+# The maximum number of messages (data items) allowed in a message queue.
+
+MAX_QUEUES_IN_SHMEM 5
+# The maximum number of message queues allowed in the shared memory.
