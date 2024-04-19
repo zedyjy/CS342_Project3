@@ -51,6 +51,22 @@ int mf_init() {
         return -1;
     }
 
+    char shmem_name[MAX_MQ_NAME_LENGTH];
+    int shmem_size = 0;
+
+    // Read configuration parameters from the file
+    char line[256];
+    while (fgets(line, sizeof(line), config_file)) {
+        char param[50];
+        if (sscanf(line, "%s", param) == 1) {
+            if (strcmp(param, "SHMEM_NAME") == 0) {
+                sscanf(line, "%*s %s", shmem_name);
+            } else if (strcmp(param, "SHMEM_SIZE") == 0) {
+                sscanf(line, "%*s %d", &shmem_size);
+            }
+        }
+    }
+
     // Open the semaphore
     mutex = sem_open(SEM_NAME, O_CREAT, 0666, 1);
     if (mutex == SEM_FAILED) {
@@ -68,28 +84,19 @@ int mf_init() {
     }
 
     // Set the size of the shared memory object
-    if (ftruncate(shm_fd, sizeof(struct shared_memory)) == -1) {
+    if (ftruncate(shm_fd, shmem_size) == -1) {
         perror("ftruncate");
         fclose(config_file);
         return -1;
     }
 
     // Map the shared memory object into the address space
-    shm_ptr = mmap(NULL, sizeof(struct shared_memory), PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
+    shm_ptr = mmap(NULL, shmem_size, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
     if (shm_ptr == MAP_FAILED) {
         perror("mmap");
         fclose(config_file);
         return -1;
     }
-
-    // Read configuration and populate shared memory
-    /*fscanf(config_file, "%d", &shm_ptr->num_queues);
-    char mqname[MAX_MQ_NAME_LENGTH]; // Temporary buffer to hold the message queue name
-    fscanf(config_file, "%s", mqname); // Read the message queue name from the configuration file
-    for (int i = 0; i < shm_ptr->num_queues; i++) {
-        // Use the read message queue name when creating the message queue
-        mf_create(mqname, 16); // Use mqname read from the config file; create mq; 16 KB
-    }*/
 
     // Close the configuration file
     fclose(config_file);
@@ -142,7 +149,7 @@ int mf_connect() {
         return -1;
     }
 
-    // Open the shared memory object
+    // Connect to the shared memory object
     shm_fd = shm_open("/shared_memory_name", O_RDWR, 0666);
     if (shm_fd == -1) {
         perror("shm_open");
