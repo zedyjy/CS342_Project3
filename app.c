@@ -27,47 +27,40 @@ int main() {
     ret = fork();
     if (ret > 0) {
         // parent process - P1
-        char *bufptr = (char *) malloc (MAX_DATALEN);
-        sem1 = sem_open(semname1, 0);
-        sem2 = sem_open(semname2, 0);
+        char *bufptr = (char *) malloc(MAX_DATALEN);
         mf_connect();
-        mf_create (mqname1, 16); // Use mqname1 here
+        mf_create(mqname1, 16); // Use mqname1 here
 
         qid = mf_open(mqname1);
         printf("\nanan5");
 
         sem_wait(mutex); // Acquire mutex before accessing shared resources
         for (i = 0; i < COUNT; ++i) {
-            sprintf (bufptr, "%s-%d", "MessageData", i);
-            mf_send (qid, (void *) bufptr, strlen(bufptr)+1);
+            sprintf(bufptr, "%s-%d", "Message Data", i);
+            mf_send(qid, (void *) bufptr, strlen(bufptr) + 1);
         }
         sem_post(mutex); // Release mutex after accessing shared resources
 
-        free (bufptr);
+        free(bufptr);
         mf_close(qid);
-        mf_disconnect();
-        sem_wait(sem2);
+        //mf_disconnect();
+        sem_post(sem2); // Notify child process
+        sem_wait(sem1); // Wait for child process to finish
         mf_remove(mqname1);
-    }
-    else if (ret == 0) {
+    } else if (ret == 0) {
         // child process - P2
-        char *bufptr = (char *) malloc (MAX_DATALEN);
-        sem1 = sem_open(semname1, 0);
-        sem2 = sem_open(semname2, 0);
-
-        sem_wait(mutex); // Acquire mutex before accessing shared resources
+        char *bufptr = (char *) malloc(MAX_DATALEN);
         mf_connect();
         qid = mf_open(mqname1);
         for (i = 0; i < COUNT; ++i) {
-            mf_recv (qid, (void *) bufptr, MAX_DATALEN);
-            printf ("%s\n", bufptr);
+            mf_recv(qid, (void *) bufptr, MAX_DATALEN);
+            printf("%s\n", bufptr);
         }
-        sem_post(mutex); // Release mutex after accessing shared resources
 
-        free (bufptr);
+        free(bufptr);
         mf_close(qid);
         mf_disconnect();
-        sem_post(sem2);
+        sem_post(sem1); // Notify parent process
     }
     return (0);
 }

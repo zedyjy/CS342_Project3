@@ -264,30 +264,26 @@ int mf_send(int qid, void *bufptr, int datalen)
         return -1;
     }
 
-    // Check if the data length exceeds the queue size
+    // Check if the data length exceeds the maximum message data length
     if (datalen > MAX_MQ_DATA_LENGTH)
     {
-        fprintf(stderr, "Message data exceeds queue size\n");
-        return -1;
-    }
-
-    // Check if the queue buffer is large enough to hold the message data
-    if (datalen > shm_ptr->queues[qid].size)
-    {
-        fprintf(stderr, "Queue buffer is too small\n");
+        fprintf(stderr, "Message data exceeds maximum length\n");
         return -1;
     }
 
     // Copy the message data from the buffer to the message queue
     memcpy(shm_ptr->queues[qid].data, bufptr, datalen);
+
+    // Set the size of the message data in the message queue structure
     shm_ptr->queues[qid].size = datalen;
 
     return 0;
 }
 
+
 int mf_recv(int qid, void *bufptr, int bufsize) {
     printf("\nyou're now in mf receive");
-    printf("\nqid in receive %d", qid);
+    printf("\nqid in receive %d\n", qid);
 
 
     // Implementation for mf_recv
