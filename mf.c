@@ -83,8 +83,11 @@ int mf_init() {
 
     // Read configuration and populate shared memory
     fscanf(config_file, "%d", &shm_ptr->num_queues);
+    char mqname[MAX_MQ_NAME_LENGTH]; // Temporary buffer to hold the message queue name
+    fscanf(config_file, "%s", mqname); // Read the message queue name from the configuration file
     for (int i = 0; i < shm_ptr->num_queues; i++) {
-        fscanf(config_file, "%s %d", shm_ptr->queues[i].name, &shm_ptr->queues[i].size);
+        // Use the read message queue name when creating the message queue
+        mf_create(mqname, 16); // Use mqname read from the config file; create mq; 16 KB
     }
 
     // Close the configuration file
@@ -92,7 +95,6 @@ int mf_init() {
 
     return 0; // Success
 }
-
 
 int mf_destroy() {
     printf("\nyoure now in mf destroy");
@@ -170,7 +172,6 @@ int mf_disconnect()
     return 0;
 }
 
-
 int mf_create(char *mqname, int mqsize) {
     printf("\nyoure now in mf create");
     printf("\nanan");
@@ -183,7 +184,7 @@ int mf_create(char *mqname, int mqsize) {
     printf("\nanan2");
 
     // Create new message queue
-    strcpy(shm_ptr->queues[shm_ptr->num_queues].name, mqname);
+    strcpy(shm_ptr->queues[shm_ptr->num_queues].name, mqname); // Use provided name
     printf("\nanan3");
 
     shm_ptr->queues[shm_ptr->num_queues].size = mqsize;
@@ -194,6 +195,7 @@ int mf_create(char *mqname, int mqsize) {
 
     return 0; // Success
 }
+
 
 int mf_remove(char *mqname)
 {
