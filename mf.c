@@ -77,7 +77,7 @@ int mf_init() {
     }
 
     // Initialize synchronization objects
-    mutex = sem_open(SEM_NAME, 0); // Open existing semaphore without O_CREAT
+    mutex = sem_open(SEM_NAME, O_CREAT, 0666, 1);
     if (mutex == SEM_FAILED) {
         perror("sem_open");
         fclose(config_file);

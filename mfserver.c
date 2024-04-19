@@ -15,19 +15,17 @@ void sigint_handler(int signum) {
 int main() {
     printf("mfserver pid=%d\n", (int) getpid());
 
-    // Call mf_init() to create and initialize the shared memory region
-    if (mf_init() == -1) {
-        fprintf(stderr, "Error initializing message passing facility\n");
-        exit(1);
-    }
-
     // Register the signal handler function
     if (signal(SIGINT, sigint_handler) == SIG_ERR) {
         perror("signal");
         exit(1);
     }
 
-    printf("You're now in 1\n");
+    // Call mf_init() to create and initialize the shared memory region
+    if (mf_init() == -1) {
+        fprintf(stderr, "Error initializing message passing facility\n");
+        exit(1);
+    }
 
     // Do some initialization if needed
 
@@ -37,4 +35,3 @@ int main() {
 
     return 0;
 }
-
