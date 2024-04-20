@@ -43,7 +43,6 @@ int mf_recv(int qid, void *bufptr, int bufsize);
 
 // Function definitions
 int mf_init() {
-    printf("You're now in mf_init()\n");
     // Read configuration file and populate shared memory
     FILE *config_file = fopen(CONFIG_FILENAME, "r");
     if (config_file == NULL) {
@@ -105,7 +104,6 @@ int mf_init() {
 }
 
 int mf_destroy() {
-    printf("\nyoure now in mf destroy");
     // Unmap the shared memory
     if (munmap(shm_ptr, sizeof(struct shared_memory)) == -1) {
         perror("munmap");
@@ -140,8 +138,6 @@ int mf_destroy() {
 }
 
 int mf_connect() {
-    printf("\nyoure now in mf connect");
-
     // Open the semaphore
     mutex = sem_open(SEM_NAME, O_CREAT, 0666, 1);
     if (mutex == SEM_FAILED) {
@@ -168,8 +164,6 @@ int mf_connect() {
 
 int mf_disconnect()
 {
-    printf("\nyoure now in mf disconnect");
-
     // Unmap the shared memory
     if (munmap(shm_ptr, sizeof(struct shared_memory)) == -1)
     {
@@ -182,8 +176,6 @@ int mf_disconnect()
 
 
 int mf_create(char *mqname, int mqsize) {
-    printf("\nyoure now in mf create");
-
     // Check if maximum number of message queues reached
     if (shm_ptr->num_queues >= MAX_MQS) {
         fprintf(stderr, "Maximum number of message queues reached\n");
@@ -200,8 +192,6 @@ int mf_create(char *mqname, int mqsize) {
 
 int mf_remove(char *mqname)
 {
-    printf("\nyoure now in mf remove");
-
     // Implementation for mf_remove
     int i;
     for (i = 0; i < shm_ptr->num_queues; i++)
@@ -226,8 +216,6 @@ int mf_remove(char *mqname)
 }
 
 int mf_open(char *mqname) {
-    printf("\nyou're now in mf open");
-
     // Implementation for mf_open
     for (int i = 0; i < shm_ptr->num_queues; i++) {
         if (strcmp(shm_ptr->queues[i].name, mqname) == 0) {
@@ -242,8 +230,6 @@ int mf_open(char *mqname) {
 
 int mf_close(int qid)
 {
-    printf("\nyoure now in mf close");
-
     // Implementation for mf_close
     if (qid < 0 || qid >= shm_ptr->num_queues)
     {
